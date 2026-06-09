@@ -1,6 +1,6 @@
 import socket
-from app.message import DNSHeader, DNSHeaderFlags
 import struct
+from app.message import DNSHeader, DNSMessage, DNSHeaderFlags, DNSQuestion, DNSRecordType
 
 
 def main():
@@ -8,35 +8,34 @@ def main():
     print("Logs from your program will appear here!")
 
     # TODO: Uncomment the code below to pass the first stage
-    
+
     udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     udp_socket.bind(("127.0.0.1", 2053))
-    
+
     while True:
         try:
             buf, source = udp_socket.recvfrom(512)
 
-            msg = DNSHeader.from_bytes(buf)
+            out = DNSMessage()
+
             flags = DNSHeaderFlags()
-            flags.toggle_is_query() # Fresh flag will always be query
-            
-            q_count = 0
-            ans_count = 0
-            auth_rec_count = 0
-            add_rec_count = 0
-
-            # Pack out var in 2 bytes chunks with big endian
-            out = struct.pack(">HHHHHH",
-                msg.get_packetid(),
-                int(flags),
-                q_count,
-                ans_count,
-                auth_rec_count,
-                add_rec_count,
+            flags.toggle_is_query()
+            out_header = DNSHeader(
+                packetid=1234,
+                flags=flags
                 )
+            
+            out_question = DNSQuestion(
+                labels="codecrafters.io".split("."),
+                record_type=DNSRecordType.A,
+                )
+            
+            out_header.set_qdcount(1)
 
-    
-            udp_socket.sendto(out, source)
+            out.set_header(out_header)
+            out.set_question(out_question)
+
+            udp_socket.sendto(out.to_bytes(), source)
         except Exception as e:
             print(f"Error receiving data: {e}")
             break

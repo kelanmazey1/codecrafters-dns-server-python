@@ -1,44 +1,68 @@
 """Module to hold objects that comprise a DNS message"""
 
 import struct
+from enum import Enum
 
+class DNSRecordType(Enum):
+    A = 1
+    CNAME = 5
 
 class DNSMessage:
     def __init__(self) -> None:
-        self.header = bytearray(2)
-
+        self._header = DNSHeader()
+        self._question = 0
+        self._records = 0
     
     def set_header(self, h: DNSHeader) -> None:
-        self.header = h
+        self._header = h
+    
+    def set_question(self, q: DNSQuestion) -> None:
+        self._question = q
 
+    def to_bytes(self) -> bytes:
+        out = bytearray()
+        out.extend(
+            self._header.to_bytes()
+        )
+        out.extend(
+            self._question.to_bytes()
+        )
 
-class DNSHeader:
-    def __init__(self, packetid: int, flags: int, q_count: int, ans_count: int, auth_rec_count: int, add_rec_count: int) -> None:
-        self.packetid = packetid
-        self.flags = DNSHeaderFlags(flags)
-        self.q_count = q_count
-        self.ans_count = ans_count
-        self.auth_rec_count = auth_rec_count
-        self.add_rec_count = add_rec_count
+        return bytes(out)
 
-    @classmethod
-    def from_bytes(cls, data: bytes) -> DNSHeader:
-        chunks = struct.unpack_from("!6H", data, 0)
+class DNSQuestion:
+    def __init__(self, labels: list[str], record_type: DNSRecordType) -> None:
+        self._labels = labels
         
-        return cls(chunks[0], chunks[1], chunks[2], chunks[3], chunks[4], chunks[5])
+        if not isinstance(record_type, DNSRecordType) :
+            raise ValueError("record_type is not a valid DNSRecordType")
+
+        self.record_type = record_type
     
     def to_bytes(self) -> bytes:
-        return struct.pack(">HHHHHH",
-            self.packetid,
-            int(self.flags),
-            self.q_count,
-            self.ans_count,
-            self.auth_rec_count,
-            self.add_rec_count,
-            )
-    
-    def get_packetid(self) -> int:
-        return self.packetid
+        """Output self._len_labels in DNS question format
+        
+           ie. \x05label\x00
+        """
+        packet_buf = bytearray()
+
+        for label in self._labels:
+            packet_buf.extend(struct.pack("B", len(label))) # Put length byte in initiall
+            for char in label:
+                packet_buf.extend(struct.pack("B", ord(char)))
+
+        # NULL byte to terminate labels
+        packet_buf.extend(struct.pack("B", 0))
+        
+        # Add Type bytes
+        packet_buf.extend(struct.pack("!H", self.record_type.value))
+        
+        #NOTE: Only going to implement Class type 1
+        packet_buf.extend(struct.pack("!H", 1))
+
+        return bytes(packet_buf)
+
+        
 
 class DNSHeaderFlags:
     def __init__(self, data: int | None = None) -> None:
@@ -126,3 +150,54 @@ class DNSHeaderFlags:
         
     
 
+
+class DNSHeader:
+    def __init__(
+        self,
+        packetid: int = 0,
+        flags: DNSHeaderFlags = DNSHeaderFlags(),
+        qd_count: int = 0,
+        ans_count: int = 0,
+        auth_rec_count: int = 0,
+        add_rec_count: int = 0,
+        ) -> None:
+        self._packetid = packetid
+        self.flags = flags
+        self._qd_count = qd_count
+        self.ans_count = ans_count
+        self.auth_rec_count = auth_rec_count
+        self.add_rec_count = add_rec_count
+
+    @classmethod
+    def from_bytes(cls, data: bytes) -> DNSHeader:
+        chunks = struct.unpack_from("!6H", data, 0)
+        return cls(chunks[0], chunks[1], chunks[2], chunks[3], chunks[4], chunks[5])
+    
+    def to_bytes(self) -> bytes:
+        return struct.pack("!HHHHHH",
+            self._packetid,
+            int(self.flags),
+            self._qd_count,
+            self.ans_count,
+            self.auth_rec_count,
+            self.add_rec_count,
+            )
+    
+    def get_packetid(self) -> int:
+        return self._packetid
+
+    def set_packetid(self, pid: int) -> int:
+        if not (0 <= pid <= 0xFFFF):
+            raise ValueError("packetid must be a 2-byte unsigned integer")
+            
+        self._packetid = pid
+
+    def get_qdcount(self) -> int:
+        return self._qd_count
+
+    def set_qdcount(self, qd_count: int) -> int:
+        if not (0 <= qd_count <= 0xFFFF):
+            raise ValueError("qd_count must be a 2-byte unsigned integer")
+            
+        self._qd_count = qd_count
+    
