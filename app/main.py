@@ -1,6 +1,13 @@
 import socket
-import struct
-from app.message import DNSHeader, DNSMessage, DNSHeaderFlags, DNSQuestion, DNSRecordType
+from app.message import (
+    DNSHeader,
+    DNSMessage,
+    DNSHeaderFlags,
+    DNSQuestion,
+    DNSRecordType,
+    ResourceRecord,
+    DNSAnswer,
+)
 
 
 def main():
@@ -16,26 +23,35 @@ def main():
         try:
             buf, source = udp_socket.recvfrom(512)
 
-            out = DNSMessage()
+            out_msg = DNSMessage()
 
             flags = DNSHeaderFlags()
-            flags.toggle_is_query()
-            out_header = DNSHeader(
-                packetid=1234,
-                flags=flags
-                )
-            
+            if not flags.is_resp():
+                flags.toggle_is_resp()
+
+            out_header = DNSHeader(packetid=1234, flags=flags)
+
+            DOMAIN_NAME="codecrafters.io"
             out_question = DNSQuestion(
-                labels="codecrafters.io".split("."),
+                domain_name=DOMAIN_NAME,
                 record_type=DNSRecordType.A,
-                )
+            )
             
-            out_header.set_qdcount(1)
+            out_resource_record = ResourceRecord(
+                domain_name=DOMAIN_NAME,
+                type=DNSRecordType.A,
+                time_to_live=60,
+                rdata="8.8.8.8")
+            
+            out_answer = DNSAnswer()
+            out_answer.add_resource_record(out_resource_record)
+            out_msg.set_header(out_header)
 
-            out.set_header(out_header)
-            out.set_question(out_question)
+            # Set out_msg components
+            out_msg.add_question(out_question)
+            out_msg.add_answer(out_answer)
 
-            udp_socket.sendto(out.to_bytes(), source)
+            udp_socket.sendto(out_msg.to_bytes(), source)
         except Exception as e:
             print(f"Error receiving data: {e}")
             break
