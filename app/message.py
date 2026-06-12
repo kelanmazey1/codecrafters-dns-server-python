@@ -1,8 +1,7 @@
 """Module to hold objects that comprise a DNS message"""
 
-import struct
 from enum import Enum
-from collections.abc import Callable
+from dataclasses import dataclass
 
 
 class DNSRecordType(Enum):
@@ -12,34 +11,39 @@ class DNSRecordType(Enum):
 
 class DNSMessage:
     def __init__(self) -> None:
-        self._header: DNSHeader = DNSHeader()
+        self._header: DNSHeader = None
         self._questions: list[DNSQuestion] = []
-        self._answer: DNSAnswer = DNSAnswer()
+        self._answer: DNSAnswer = None
 
     def set_header(self, h: DNSHeader) -> None:
         """Sets header and updates h._qdcount and h._an_count"""
         self._header = h
+
         self._header.set_qdcount(len(self._questions))
-        self._header.set_ancount(self._answer.get_num_records())
+        
+        if self._answer:
+            self._header.set_ancount(self._answer.get_num_records())
+        else:
+            self._header.set_ancount(0)
+    
+    def get_header(self) -> DNSHeader:
+        return self._header
 
     def add_question(self, q: DNSQuestion) -> None:
         self._questions.append(q)
         self._header.set_qdcount(len(self._questions))
+
+    def get_questions(self) -> list[DNSQuestion]:
+        return self._questions
 
     def add_answer(self, a: DNSAnswer) -> None:
         """Add a DNSAnswer to self. Updates self._header._an_count"""
         self._answer = a
         self._header.set_ancount(self._answer.get_num_records())
 
-    def to_bytes(self) -> bytes:
+    def get_answer(self) -> DNSAnswer:
+        return self._answer
 
-        out = bytearray()
-        out.extend(self._header.to_bytes())
-        for q in self._questions:
-            out.extend(q.to_bytes())
-
-        out.extend(self._answer.to_bytes())
-        return bytes(out)
 
 
 class DNSAnswer:
@@ -52,129 +56,36 @@ class DNSAnswer:
     def get_num_records(self) -> int:
         return len(self._records)
 
-    def to_bytes(self) -> bytes:
-        out = bytearray()
-        for record in self._records:
-            out.extend(record.to_bytes())
-        return bytes(out)
+    def get_records(self):
+        return self._records
 
 
-def encode_domain_name(domain_name: str) -> bytes:
-    """Helper function to turn a list of strings into encodes labels for DNS questions and resource records"""
-    labels = domain_name.split(".")
 
-    label_buf = bytearray()
-    for label in labels:
-        label_buf.extend(struct.pack("B", len(label)))  # Put length byte in initiall
-        for char in label:
-            label_buf.extend(struct.pack("B", ord(char)))
-
-    # NULL byte to terminate labels
-    label_buf.extend(struct.pack("B", 0))
-
-    return bytes(label_buf)
-
-
-def encode_ipv4(ip_addr: str) -> bytes:
-    str_elements = ip_addr.split(".")
-    if len(str_elements) != 4:
-        raise ValueError(
-            "Invalid IP address given, expected 4 numbers separated by '.', got: ",
-            ip_addr,
-        )
-
-    out = bytearray()
-    for el in str_elements:
-        out.extend(struct.pack("B", int(el)))
-
-    return bytes(out)
-
-
-def record_rdata_handler_factory(
-    record_type: DNSRecordType,
-) -> Callable[[str], bytearray]:
-    """Returns an appropriate function to encode rdata, passed as a python string, based on record_type
-    Also length is returned for rdlength
-    bytearray is returned to allow for extension.
-    """
-    if record_type == DNSRecordType.A:
-        return encode_ipv4
-
-    elif record_type == DNSRecordType.CNAME:
-        return encode_domain_name
-
-    else:
-        raise ValueError("Record type not supported")
-
-
+@dataclass
 class ResourceRecord:
-    def __init__(
-        self,
-        domain_name: str,
-        type: DNSRecordType,
-        time_to_live: int,
-        rdlength: int = 0,
-        rdata: bytes = None,
-    ) -> None:
-        self.domain_name = domain_name
-        self.type = type
-        self.time_to_live = time_to_live
+    domain_name: str
+    type: DNSRecordType
+    time_to_live: int
+    rdlength: int = 0
+    rdata: bytes = None
 
-        self.rdlength = rdlength
-        self.rdata = rdata
-
-    def to_bytes(self) -> bytes:
-
-        record_buf = bytearray()
-        record_buf.extend(encode_domain_name(self.domain_name))
-
-        handler = record_rdata_handler_factory(self.type)
-
-        encoded_rdata = handler(self.rdata)
-        self.rdlength = len(encoded_rdata)
-
-        record_buf.extend(
-            struct.pack(
-                "!HHIH",
-                self.type.value,
-                1,  # NOTE: only supporting class IN
-                self.time_to_live,
-                self.rdlength,
-            )
-        )
-
-        record_buf.extend(encoded_rdata)
-
-        return bytes(record_buf)
 
 
 class DNSQuestion:
     def __init__(self, domain_name: str, record_type: DNSRecordType) -> None:
-        self.domain_name = domain_name
-
         if not isinstance(record_type, DNSRecordType):
             raise ValueError("record_type is not a valid DNSRecordType")
 
+        self.domain_name = domain_name
+
         self.record_type = record_type
-
-    def to_bytes(self) -> bytes:
-        """Output self._len_labels in DNS question format
-
-        ie. \x05label\x00
-        """
-        packet_buf = bytearray()
-        packet_buf.extend(encode_domain_name(self.domain_name))
-        # Add Type bytes
-        packet_buf.extend(struct.pack("!H", self.record_type.value))
-
-        # NOTE: Only going to implement Class type 1
-        packet_buf.extend(struct.pack("!H", 1))
-
-        return bytes(packet_buf)
 
 
 class DNSHeaderFlags:
     def __init__(self, data: int | None = None) -> None:
+        if data and not isinstance(data, int):
+            raise ValueError("DNSHeaderFlags can only be passed an int, was given type: ", type(data))
+
         if data:
             self._flags = data
         else:
@@ -195,7 +106,7 @@ class DNSHeaderFlags:
             raise ValueError("opcode must be a 4 bit unsigned int")
         # Clear opcode bits
         OPCODE_MASK = 0xF << 11
-        self._flags = self._flags & -OPCODE_MASK
+        self._flags = self._flags & ~OPCODE_MASK
 
         # Set opcode
         self._flags |= opcode << 11
@@ -217,13 +128,13 @@ class DNSHeaderFlags:
     def is_truncated(self) -> bool:
         return bool(self._flags & (1 << 9))
 
-    def toggle_recursion_desired(self, data: bytes) -> None:
+    def toggle_recursion_desired(self) -> None:
         self._flags ^= 1 << 8
 
     def is_recursion_desired(self) -> bool:
         return bool(self._flags & (1 << 8))
 
-    def toggle_recursion_available(self, data: bytes) -> None:
+    def toggle_recursion_available(self) -> None:
         self._flags ^= 1 << 7
 
     def is_recursion_available(self) -> bool:
@@ -268,28 +179,12 @@ class DNSHeader:
         auth_rec_count: int = 0,
         add_rec_count: int = 0,
     ) -> None:
-        self._packetid = packetid
+        self.set_packetid(packetid)
         self.flags = flags
         self._qd_count = qd_count
         self._an_count = ans_count
         self.auth_rec_count = auth_rec_count
         self.add_rec_count = add_rec_count
-
-    @classmethod
-    def from_bytes(cls, data: bytes) -> DNSHeader:
-        chunks = struct.unpack_from("!6H", data, 0)
-        return cls(chunks[0], chunks[1], chunks[2], chunks[3], chunks[4], chunks[5])
-
-    def to_bytes(self) -> bytes:
-        return struct.pack(
-            "!HHHHHH",
-            self._packetid,
-            int(self.flags),
-            self._qd_count,
-            self._an_count,
-            self.auth_rec_count,
-            self.add_rec_count,
-        )
 
     def get_packetid(self) -> int:
         return self._packetid
@@ -297,7 +192,6 @@ class DNSHeader:
     def set_packetid(self, pid: int) -> int:
         if not (0 <= pid <= 0xFFFF):
             raise ValueError("packetid must be a 2-byte unsigned integer")
-
         self._packetid = pid
 
     def get_qdcount(self) -> int:
