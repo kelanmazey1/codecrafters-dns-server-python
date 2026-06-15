@@ -49,7 +49,7 @@ def encode_domain_name(domain_name: str) -> bytes:
 
     label_buf = bytearray()
     for label in labels:
-        label_buf.extend(struct.pack("B", len(label)))  # Put length byte in initiall
+        label_buf.extend(struct.pack("B", len(label)))  # Put length byte in initial
         for char in label:
             label_buf.extend(struct.pack("B", ord(char)))
 

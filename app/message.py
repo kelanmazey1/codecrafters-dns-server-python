@@ -77,7 +77,6 @@ class DNSQuestion:
             raise ValueError("record_type is not a valid DNSRecordType")
 
         self.domain_name = domain_name
-
         self.record_type = record_type
 
 
@@ -145,7 +144,7 @@ class DNSHeaderFlags:
             raise ValueError("reserved must be a 3 bit unsigned int")
         # Clear reserved bits
         RESERVED_MASK = 0x7 << 4
-        self._flags = self._flags & -RESERVED_MASK
+        self._flags = self._flags & ~RESERVED_MASK
 
         # Set reserved
         self._flags |= reserved << 4
@@ -159,7 +158,7 @@ class DNSHeaderFlags:
             raise ValueError("resp_code must be a 4 bit unsigned int")
         # Clear resp_code bits, ie. 4 right most bits
         RESP_CODE_MASK = 0xF
-        self._flags = self._flags & -RESP_CODE_MASK
+        self._flags = self._flags & ~RESP_CODE_MASK
 
         # Set resp_code
         self._flags |= resp_code

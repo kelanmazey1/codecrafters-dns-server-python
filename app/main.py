@@ -26,7 +26,8 @@ def main():
             buf, source = udp_socket.recvfrom(512)
             decoder = DNSDecoder()
 
-            req_header = decoder.decode_message(buf).get_header()
+            req_msg = decoder.decode_message(buf)
+            req_header = req_msg.get_header()
             packetid = req_header.get_packetid()
 
             opcode = req_header.flags.get_opcode()
@@ -50,14 +51,16 @@ def main():
 
             resp_header.flags.set_response_code(rcode)
 
-            DOMAIN_NAME = "codecrafters.io"
+            # TODO: Assuming only responding with 1 question
+            domain_name = req_msg.get_questions()[0].domain_name
             resp_question = DNSQuestion(
-                domain_name=DOMAIN_NAME,
+                domain_name=domain_name,
                 record_type=DNSRecordType.A,
             )
 
+            
             resp_resource_record = ResourceRecord(
-                domain_name=DOMAIN_NAME,
+                domain_name=domain_name,
                 type=DNSRecordType.A,
                 time_to_live=60,
                 rdata="8.8.8.8",
