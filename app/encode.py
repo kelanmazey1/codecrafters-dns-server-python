@@ -64,6 +64,7 @@ class DNSEncoder:
         out = bytearray()
         out.extend(self.encode_header(m.get_header()))
 
+
         for q in m.get_questions():
             out.extend(self.encode_question(q))
 
@@ -82,6 +83,9 @@ class DNSEncoder:
         )
 
     def encode_answer(self, a: DNSAnswer) -> bytes:
+        if a is None:
+            return bytes(0)
+
         out = bytearray()
         for record in a.get_records():
             out.extend(self.encode_resource_record(record))

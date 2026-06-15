@@ -25,12 +25,15 @@ def main():
         try:
             buf, source = udp_socket.recvfrom(512)
             decoder = DNSDecoder()
-
+            
             req_msg = decoder.decode_message(buf)
+            # print(bin(int.from_bytes(buf, byteorder="big")))
+            print(int(req_msg.get_header().flags))
             req_header = req_msg.get_header()
             packetid = req_header.get_packetid()
 
             opcode = req_header.flags.get_opcode()
+            
             recursion_desired = req_header.flags.is_recursion_desired()
 
             resp_packet = DNSMessage()
@@ -51,34 +54,36 @@ def main():
 
             resp_header.flags.set_response_code(rcode)
 
-            # TODO: Assuming only responding with 1 question
-            domain_name = req_msg.get_questions()[0].domain_name
-            resp_question = DNSQuestion(
-                domain_name=domain_name,
-                record_type=DNSRecordType.A,
-            )
-
-            
-            resp_resource_record = ResourceRecord(
-                domain_name=domain_name,
-                type=DNSRecordType.A,
-                time_to_live=60,
-                rdata="8.8.8.8",
-            )
-
             resp_answer = DNSAnswer()
-            resp_answer.add_resource_record(resp_resource_record)
-            resp_packet.set_header(resp_header)
 
-            # Set resp_msg components
-            resp_packet.add_question(resp_question)
-            resp_packet.add_answer(resp_answer)
+            # TODO: Assuming only responding with 1 question
+            for q in req_msg.get_questions():
+                print("trying to get the questions")
+                resp_question = DNSQuestion(
+                    domain_name=q.domain_name,
+                    record_type=DNSRecordType(q.record_type)
+                )
+
+                
+                resp_resource_record = ResourceRecord(
+                    domain_name=q.domain_name,
+                    type=DNSRecordType.A,
+                    time_to_live=60,
+                    rdata="8.8.8.8",
+                )
+
+                resp_answer.add_resource_record(resp_resource_record)
+                resp_packet.add_question(resp_question)
+                resp_packet.add_answer(resp_answer)
+
+            resp_packet.set_header(resp_header)
 
 
             encoder = DNSEncoder()
             udp_socket.sendto(encoder.encode_message(resp_packet), source)
         except Exception as e:
             print(f"Error receiving data: {e}")
+            raise e
             break
 
 

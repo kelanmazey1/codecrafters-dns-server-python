@@ -80,6 +80,7 @@ class DNSQuestion:
         self.record_type = record_type
 
 
+
 class DNSHeaderFlags:
     def __init__(self, data: int | None = None) -> None:
         if data and not isinstance(data, int):
