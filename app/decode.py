@@ -69,7 +69,6 @@ class DNSDecoder:
 
             # If byte is start of a pointer, get byte position, recursively call to return label
             if labels[index] & 0xc0 == 0xc0:
-                print("thinks it's a pointer")
                 label_position = labels[index+1]
 
                 # Read label from label_position, returns the label being pointed to and appends
@@ -82,7 +81,6 @@ class DNSDecoder:
             # Read indexed byte to get length
             label_len = labels[index]
             if label_len == 0:
-                print("found a null byte")
                 return out_list, labels[index+1:]
 
             # Move index past length label
