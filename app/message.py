@@ -38,7 +38,6 @@ class DNSMessage:
         return self._answer
 
 
-
 class DNSAnswer:
     def __init__(self) -> None:
         self._records: list[ResourceRecord] = []
@@ -53,7 +52,6 @@ class DNSAnswer:
         return self._records
 
 
-
 @dataclass
 class ResourceRecord:
     domain_name: str
@@ -61,7 +59,6 @@ class ResourceRecord:
     time_to_live: int
     rdlength: int = 0
     rdata: bytes = None
-
 
 
 class DNSQuestion:
@@ -73,11 +70,12 @@ class DNSQuestion:
         self.record_type = record_type
 
 
-
 class DNSHeaderFlags:
     def __init__(self, data: int | None = None) -> None:
         if data and not isinstance(data, int):
-            raise ValueError("DNSHeaderFlags can only be passed an int, was given type: ", type(data))
+            raise ValueError(
+                "DNSHeaderFlags can only be passed an int, was given type: ", type(data)
+            )
 
         if data:
             self._flags = data

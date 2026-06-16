@@ -25,13 +25,13 @@ def main():
         try:
             buf, source = udp_socket.recvfrom(512)
             decoder = DNSDecoder()
-            
+
             req_msg = decoder.decode_message(buf)
             req_header = req_msg.get_header()
             packetid = req_header.get_packetid()
 
             opcode = req_header.flags.get_opcode()
-            
+
             recursion_desired = req_header.flags.is_recursion_desired()
 
             resp_packet = DNSMessage()
@@ -55,15 +55,11 @@ def main():
             resp_packet.set_header(resp_header)
             resp_answer = DNSAnswer()
 
-            # TODO: Assuming only responding with 1 question
             for q in req_msg.get_questions():
-                print("trying to get the questions")
                 resp_question = DNSQuestion(
-                    domain_name=q.domain_name,
-                    record_type=DNSRecordType(q.record_type)
+                    domain_name=q.domain_name, record_type=DNSRecordType(q.record_type)
                 )
 
-                
                 resp_resource_record = ResourceRecord(
                     domain_name=q.domain_name,
                     type=DNSRecordType.A,
@@ -74,8 +70,6 @@ def main():
                 resp_answer.add_resource_record(resp_resource_record)
                 resp_packet.add_question(resp_question)
                 resp_packet.add_answer(resp_answer)
-
-
 
             encoder = DNSEncoder()
             udp_socket.sendto(encoder.encode_message(resp_packet), source)
