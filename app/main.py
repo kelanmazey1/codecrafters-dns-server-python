@@ -27,8 +27,6 @@ def main():
             decoder = DNSDecoder()
             
             req_msg = decoder.decode_message(buf)
-            # print(bin(int.from_bytes(buf, byteorder="big")))
-            print(int(req_msg.get_header().flags))
             req_header = req_msg.get_header()
             packetid = req_header.get_packetid()
 
@@ -54,6 +52,7 @@ def main():
 
             resp_header.flags.set_response_code(rcode)
 
+            resp_packet.set_header(resp_header)
             resp_answer = DNSAnswer()
 
             # TODO: Assuming only responding with 1 question
@@ -76,7 +75,6 @@ def main():
                 resp_packet.add_question(resp_question)
                 resp_packet.add_answer(resp_answer)
 
-            resp_packet.set_header(resp_header)
 
 
             encoder = DNSEncoder()

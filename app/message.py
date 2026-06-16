@@ -19,13 +19,6 @@ class DNSMessage:
         """Sets header and updates h._qdcount and h._an_count"""
         self._header = h
 
-        self._header.set_qdcount(len(self._questions))
-        
-        if self._answer:
-            self._header.set_ancount(self._answer.get_num_records())
-        else:
-            self._header.set_ancount(0)
-    
     def get_header(self) -> DNSHeader:
         return self._header
 
