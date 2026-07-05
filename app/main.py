@@ -1,3 +1,4 @@
+import argparse
 import socket
 from app.message import (
     DNSHeader,
@@ -8,15 +9,35 @@ from app.message import (
     DNSAnswer,
 )
 
+from app.forward import ForwardingAddress, forward_query
 from app.encode import DNSEncoder
 from app.decode import DNSDecoder
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="A DNS server")
+    parser.add_argument(
+        "--resolver",
+        metavar="<address>",
+        help="Upstream resolver address as ip:port (e.g. 8.8.8.8:53)",
+        type=ForwardingAddress
+    )
+    args = parser.parse_args()
+
+    if args.resolver:
+        return args.resolver
+
+    return None   
 
 
 def main():
     # You can use print statements as follows for debugging, they'll be visible when running tests.
     print("Logs from your program will appear here!")
 
-    # TODO: Uncomment the code below to pass the first stage
+    forward_addr = parse_args()
+    if forward_addr is not None:
+        print(f"Forwarding to resolver {forward_addr.get_host()}:{forward_addr.get_port()}")
+
 
     udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     udp_socket.bind(("127.0.0.1", 2053))
@@ -24,7 +45,9 @@ def main():
     while True:
         try:
             buf, source = udp_socket.recvfrom(512)
+
             decoder = DNSDecoder()
+            encoder = DNSEncoder()
 
             req_msg = decoder.decode_message(buf)
             req_header = req_msg.get_header()
@@ -55,23 +78,40 @@ def main():
             resp_packet.set_header(resp_header)
             resp_answer = DNSAnswer()
 
+
             for q in req_msg.get_questions():
                 resp_question = DNSQuestion(
-                    domain_name=q.domain_name, record_type=DNSRecordType(q.record_type)
+                    domain_name=q.domain_name, record_type=q.record_type
                 )
 
-                resp_resource_record = ResourceRecord(
-                    domain_name=q.domain_name,
-                    type=DNSRecordType.A,
-                    time_to_live=60,
-                    rdata="8.8.8.8",
-                )
+                if forward_addr:
+                    split_msg = DNSMessage()
+                    split_msg.set_header(req_msg.get_header())
+                    split_msg.add_question(q)
 
-                resp_answer.add_resource_record(resp_resource_record)
+                    if req_msg.get_answer():
+                        split_msg.set_answer(req_msg.get_answer())
+
+                    upstream_resp = forward_query(forward_addr, encoder.encode_message(split_msg))
+                    upstream_answer = upstream_resp.get_answer()
+                    for rr in upstream_answer.get_records():
+                        resp_answer.add_resource_record(rr)
+
+                else:
+                    resp_resource_record = ResourceRecord(
+                        domain_name=q.domain_name,
+                        type=DNSRecordType.A,
+                        time_to_live=60,
+                        rdata="8.8.8.8",
+                    )
+
+                    resp_answer.add_resource_record(resp_resource_record)
+                
                 resp_packet.add_question(resp_question)
                 resp_packet.add_answer(resp_answer)
 
-            encoder = DNSEncoder()
+
+
             udp_socket.sendto(encoder.encode_message(resp_packet), source)
         except Exception as e:
             print(f"Error receiving data: {e}")

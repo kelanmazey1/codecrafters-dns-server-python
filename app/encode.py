@@ -12,6 +12,10 @@ import struct
 
 
 def encode_ipv4(ip_addr: str) -> bytes:
+    """Encode ip_addr as bytes, if is already bytes object does nothing this is to allow for forwarding"""
+    if isinstance(ip_addr, bytes) and len(ip_addr) == 4:
+        return ip_addr
+
     str_elements = ip_addr.split(".")
     if len(str_elements) != 4:
         raise ValueError(
@@ -43,19 +47,20 @@ def record_rdata_handler_factory(
         raise ValueError("Record type not supported")
 
 
-def encode_domain_name(domain_name: str) -> bytes:
+def encode_domain_name(domain_name: str | list[str]) -> bytes:
     """Helper function to turn a list of strings into encodes labels for DNS questions and resource records"""
-    labels = domain_name.split(".")
+
+    if isinstance(domain_name, str):
+        domain_name = domain_name.split(".")
 
     label_buf = bytearray()
-    for label in labels:
+    for label in domain_name:
         label_buf.extend(struct.pack("B", len(label)))  # Put length byte in initial
         for char in label:
             label_buf.extend(struct.pack("B", ord(char)))
 
     # NULL byte to terminate labels
     label_buf.extend(struct.pack("B", 0))
-
     return bytes(label_buf)
 
 
@@ -95,12 +100,14 @@ class DNSEncoder:
         return struct.pack("!H", int(hf))
 
     def encode_question(self, q: DNSQuestion) -> bytes:
+        # TODO: Big TODO is to enable compression on this side
         """Output self._len_labels in DNS question format
 
         ie. \x05label\x00
         """
         packet_buf = bytearray()
-        packet_buf.extend(encode_domain_name(q.domain_name))
+        encoded = encode_domain_name(q.domain_name)
+        packet_buf.extend(encoded)
         # Add Type bytes
         packet_buf.extend(struct.pack("!H", q.record_type.value))
 

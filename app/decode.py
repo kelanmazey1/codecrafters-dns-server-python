@@ -30,6 +30,13 @@ class DNSDecoder:
             q = self.decode_question(self._buffer[self._remaining_index :])
             m.add_question(q)
 
+        a = DNSAnswer()
+        for _ in range(m.get_header().get_ancount()):
+            rr = self.decode_answer(self._buffer[self._remaining_index :])
+            a.add_resource_record(rr)
+
+        m.set_answer(a)
+
         return m
 
     def decode_header(self, b: bytes) -> DNSHeader:
@@ -45,7 +52,41 @@ class DNSDecoder:
         )
 
     def decode_answer(self, b: bytes) -> DNSAnswer:
-        pass
+        labels, remainder = self.decode_labels(b)
+        self._remaining_index = len(self._buffer) - len(remainder)
+
+        try:
+            record_type, _ = struct.unpack_from(
+                "!HH", self._buffer[self._remaining_index:]
+            )  # Record class is ignored, always assumed 1 / IN
+            self._remaining_index += 4  # We add 4 to the remainder to skip past the record type and class just unpacked
+
+            ttl, = struct.unpack_from(
+                "!I", self._buffer[self._remaining_index:]
+            )
+            self._remaining_index += 4  
+
+            rdlength, = struct.unpack_from(
+                "!H", self._buffer[self._remaining_index:]
+            )
+            self._remaining_index += 2 
+            rdata = self._buffer[self._remaining_index:self._remaining_index + rdlength]
+
+            return ResourceRecord(
+                labels,
+                DNSRecordType(record_type),
+                ttl,
+                rdlength,
+                rdata,
+            )
+
+
+
+        except ValueError as e:
+            raise ValueError(
+                "Error unpacking answer"
+            ) from e
+
 
     def decode_header_flags(self, b: bytes) -> DNSHeaderFlags:
         pass
@@ -85,7 +126,6 @@ class DNSDecoder:
                 resolved_label, _ = self.decode_labels(self._buffer[label_position:])
                 out_list.extend(resolved_label)
 
-                # Return bytes after label_position pointer
                 return out_list, labels[index + 2 :]
 
             # Read indexed byte to get length

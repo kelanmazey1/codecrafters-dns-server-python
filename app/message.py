@@ -19,6 +19,10 @@ class DNSMessage:
         """Sets header and updates h._qdcount and h._an_count"""
         self._header = h
 
+    def set_answer(self, a: DNSAnswer) -> None:
+        """Sets header and updates h._qdcount and h._an_count"""
+        self._answer = a
+
     def get_header(self) -> DNSHeader:
         return self._header
 
@@ -48,7 +52,7 @@ class DNSAnswer:
     def get_num_records(self) -> int:
         return len(self._records)
 
-    def get_records(self):
+    def get_records(self) -> list[ResourceRecord]:
         return self._records
 
 
@@ -60,6 +64,9 @@ class ResourceRecord:
     rdlength: int = 0
     rdata: bytes = None
 
+    def get_domain_as_parts(self) -> list[str]:
+        return self.domain_name.split(".")
+
 
 class DNSQuestion:
     def __init__(self, domain_name: str, record_type: DNSRecordType) -> None:
@@ -68,6 +75,10 @@ class DNSQuestion:
 
         self.domain_name = domain_name
         self.record_type = record_type
+    
+    def get_domain_as_parts(self) -> list[str]:
+        """Return hello.com as ["hello", "com"]"""
+        return self.domain_name.split(".")
 
 
 class DNSHeaderFlags:
